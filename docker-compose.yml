@@ -1,0 +1,131 @@
+# Docker compose to set up containers for all services you need:
+# VPN
+#   Sonarr, Radarr, Lidarr, Qbittorrent
+# Non-VPN
+#   Plex, get_iplayer
+# Before running docker-compose, you should pre-create all of the following folders.
+version: "3"
+services:
+    expressvpn:
+        image: polkaned/expressvpn:latest
+        container_name: expressvpn
+        environment:
+            - ACTIVATION_CODE=
+            - AUTO_UPDATE=true
+        cap_add:
+            - NET_ADMIN
+        devices:
+            - "/dev/net/tun:/dev/net/tun"
+        privileged: true
+        tty: true
+        ports:
+            # QBT UI Port
+            - 8090:8090
+            # Bittorrent port
+            - 6881:6881
+            - 6881:6881/udp
+            # Web port
+            - 8080:8080
+            - 9117:9117
+            # Jackett port
+            - 9227:9227
+            # Sonarr port
+            - 8989:8989
+            # Radarr port
+            - 7878:7878
+        command: /bin/bash
+        restart: unless-stopped
+
+    qbittorrent:
+        image: linuxserver/qbittorrent:latest
+        container_name: qbittorrent
+        environment:
+            - PUID=3000
+            - PGID=3000
+            - TZ=Europe/Vienna
+            - UMASK_SET=022
+            - WEBUI_PORT=8090
+            - AUTO_UPDATE=true
+        volumes:
+            - /mnt/hz-NAS/Apps/dockerdata/qbt/config:/config
+            - /mnt/hz-NAS/data/Media:/downloads
+            - /mnt/hz-NAS/data/Media/TV:/tvdownloads:rw
+            - /mnt/hz-NAS/data/Media/Movies:/moviesdownloads:rw
+        network_mode: service:expressvpn
+        restart: unless-stopped
+
+    prowlarr:
+        image: linuxserver/prowlarr:develop
+        container_name: prowlarr
+        environment:
+            - PUID=3000
+            - PGID=3000
+            - TZ=Europe/Vienna
+	    - AUTO_UPDATE=true
+        volumes:
+            - /mnt/hz-NAS/Apps/dockerdata/prowlarr:/config
+        restart: unless-stopped
+        network_mode: service:expressvpn
+        depends_on:
+            - expressvpn
+            - qbittorrent
+    
+    sonarr:
+        image: linuxserver/sonarr:latest
+        container_name: sonarr_v3
+        environment:
+            - PUID=3000
+            - PGID=3000
+            - TZ=Europe/Vienna
+            - AUTO_UPDATE=true
+        volumes:
+            - /etc/localtime:/etc/localtime:ro
+            - /mnt/hz-NAS/Apps/dockerdata/sonarr/config:/config
+            - /mnt/hz-NAS/data/Media/TV:/tv
+        restart: unless-stopped
+        network_mode: service:expressvpn
+        depends_on:
+            - prowlarr
+            - qbittorrent
+
+    radarr:
+        image: linuxserver/radarr:latest
+        container_name: radarr_v3
+        environment:
+            - PUID=3000
+            - PGID=3000
+            - TZ=Europe/Vienna
+            - AUTO_UPDATE=true
+        volumes:
+            - /etc/localtime:/etc/localtime:ro
+            - /mnt/hz-NAS/Apps/dockerdata/radarr/config:/config
+            - /mnt/hz-NAS/data/Media/Movies:/movies
+        restart: unless-stopped
+        network_mode: service:expressvpn
+        depends_on:
+            - prowlarr
+            - qbittorrent
+            
+    plex:
+        container_name: plex
+        image: linuxserver/plex
+        devices:
+            - /dev/dri:/dev/dri
+        privileged: true
+        environment:
+            PGID: '3000'
+            PUID: '3000'
+            VERSION: docker
+            AUTO_UPDATE: true
+        network_mode: host
+        restart: unless-stopped
+        volumes:
+            - /mnt/hz-NAS/Apps/dockerdata/plex:/config:rw
+            - /mnt/hz-NAS/data/Media/TV:/tv:rw
+            - /mnt/hz-NAS/data/Media/Movies:/movies:rw
+volumes:
+  videos:
+    driver_opts:
+      type: "nfs"
+      o: "addr=192.168.1.4,nolock,ro,soft,nfsvers=4"
+      device: ":/path/to/video-dir"
