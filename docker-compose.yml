@@ -61,7 +61,7 @@ services:
             - PUID=3000
             - PGID=3000
             - TZ=Europe/Vienna
-	    - AUTO_UPDATE=true
+            - AUTO_UPDATE=true
         volumes:
             - /mnt/hz-NAS/Apps/dockerdata/prowlarr:/config
         restart: unless-stopped
